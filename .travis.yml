@@ -7,5 +7,4 @@ before_install:
   - sudo apt-get update
 
 install:
-  - sudo apt-get install protobuf-compiler
-  - protoc --version || true
+  - sudo apt-get install libprotobuf-dev libzmq3-dev
