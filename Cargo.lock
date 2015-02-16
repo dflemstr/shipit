@@ -3,7 +3,7 @@ name = "shipit"
 version = "0.0.1"
 dependencies = [
  "protobuf 0.0.9 (git+https://github.com/stepancheg/rust-protobuf.git)",
- "zmq 0.6.0 (git+https://github.com/cactorium/rust-zmq?branch=update)",
+ "zmq 0.6.0 (git+https://github.com/dflemstr/rust-zmq.git)",
 ]
 
 [[package]]
@@ -24,7 +24,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 [[package]]
 name = "protobuf"
 version = "0.0.9"
-source = "git+https://github.com/stepancheg/rust-protobuf.git#487d8b360c5b0a3518c3d04db62902ab60a2c3aa"
+source = "git+https://github.com/stepancheg/rust-protobuf.git#9b02c21b3fcda651074b5e5f52ed39dca96edbb8"
 
 [[package]]
 name = "rand"
@@ -47,15 +47,15 @@ dependencies = [
 [[package]]
 name = "zmq"
 version = "0.6.0"
-source = "git+https://github.com/cactorium/rust-zmq?branch=update#20871315bae2107890c3d38cad95ab3925307e4e"
+source = "git+https://github.com/dflemstr/rust-zmq.git#be5ebb24fadcf40aa08dd951c9f707e341ba44f0"
 dependencies = [
  "rand 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "time 0.1.17 (registry+https://github.com/rust-lang/crates.io-index)",
- "zmq-sys 0.6.0 (git+https://github.com/cactorium/rust-zmq?branch=update)",
+ "zmq-sys 0.6.0 (git+https://github.com/dflemstr/rust-zmq.git)",
 ]
 
 [[package]]
 name = "zmq-sys"
 version = "0.6.0"
-source = "git+https://github.com/cactorium/rust-zmq?branch=update#20871315bae2107890c3d38cad95ab3925307e4e"
+source = "git+https://github.com/dflemstr/rust-zmq.git#be5ebb24fadcf40aa08dd951c9f707e341ba44f0"
 

@@ -1,16 +1,25 @@
-#![feature(core)]
+#![feature(alloc, core, std_misc)]
 
 extern crate protobuf;
 extern crate zmq;
 
+mod error;
 mod shipit_protocol;
+
+use std::result::Result;
+use std::rt::unwind::try;
+use std::thread::Thread;
+use std::boxed::BoxAny;
+use std::option::Option;
 
 use protobuf::core::Message;
 use protobuf::error::ProtobufError;
 
 use zmq::Socket;
 
-use shipit_protocol::{Request, Response};
+use error::Error;
+
+use shipit_protocol::{Request, Response, Error_Kind};
 
 struct GameState {
     players: Vec<Player>,
@@ -28,71 +37,130 @@ impl GameState {
 struct Player {
     name: String,
     access_token: String,
-
-    life: f64,
-    energy: f64,
-    score: u32,
-
-    momentum: f64,
-    angular_momentum: f64,
-
-    x: f64,
-    y: f64,
 }
 
-fn await(s: &mut Socket) -> Result<Request, ProtobufError> {
-    let mut msg = zmq::Message::new().ok().unwrap();
-    s.recv(&mut msg, 0).ok().unwrap();
-    protobuf::parse_from_bytes(msg.as_slice())
+
+fn await(s: &mut Socket) -> Result<Request, Error> {
+    let mut msg = try!(zmq::Message::new());
+    try!(s.recv(&mut msg, 0));
+    unsafe {
+        // This is the most annoying thing ever; the protobuf library
+        // crashes on bad input.  We need to actually catch this error
+        // using super unsafe code
+
+        // If the try block doesn't set anything, this is the default
+        let mut parsed = Option::None;
+
+        // Isolate the execution
+        let r = try(|| {
+            parsed = Option::Some(
+                protobuf::parse_from_bytes::<Request>(msg.as_slice())
+                    .map_err(|e| Error::Protobuf(e)))
+        });
+
+        match r {
+            Err(e) => {
+                let m = e.downcast::<&str>().map(|b|*b)
+                    .ok().unwrap_or("Unknown error").to_string();
+                parsed = Option::Some(
+                    Err(Error::Protobuf(ProtobufError::WireError(m))))
+            },
+            _ => {}
+        }
+
+        parsed.unwrap()
+    }
 }
 
-fn respond(s: &mut Socket, resp: Response) {
-    s.send(resp.write_to_bytes().ok().unwrap().as_slice(), 0).ok().unwrap();
+fn respond(s: &mut Socket, resp: Response) -> Result<(), Error> {
+    let bytes = try!(resp.write_to_bytes());
+    try!(s.send(bytes.as_slice(), 0));
+    Ok(())
 }
 
-fn handle(req: &Request, resp: &mut Response, state: &mut GameState) {
+fn handle(i: u32, req: &Request) -> Result<Response, Error> {
+    let mut resp = Response::new();
+
     if req.has_identify() {
         println!("Connected: {}", req.get_identify().get_name());
         resp.mut_identified().set_access_token("abc123".to_string());
 
         let (major, minor, patch) = zmq::version();
-        let info = format!("ZMQ version: {}.{}.{}", major, minor, patch);
+        let info = format!("Served by worker {}, ZMQ version {}.{}.{}",
+                           i, major, minor, patch);
 
         resp.mut_identified().set_server_info(info.to_string());
     } else {
-        resp.mut_error()
-            .set_kind(shipit_protocol::Error_Kind::UNKNOWN_REQUEST);
-        resp.mut_error()
-            .set_msg("This server doesn't support that request".to_string());
+        return Err(Error::UnknownRequest);
+    }
+
+    Ok(resp)
+}
+
+fn await_and_handle(i: u32, s: &mut Socket) -> Result<Response, Error> {
+    let req = try!(await(s));
+    let resp = try!(handle(i, &req));
+    Ok(resp)
+}
+
+fn run_worker(i: u32, s: &mut Socket) {
+    loop {
+        let resp = match await_and_handle(i, s) {
+            Ok(r) => r,
+            Err(Error::Protobuf(ProtobufError::WireError(msg))) =>
+                err_response(Error_Kind::WIRE_ERROR, msg),
+            Err(Error::Protobuf(ProtobufError::IoError(e))) =>
+                err_response(Error_Kind::IO_ERROR, e.to_string()),
+            Err(Error::UnknownRequest) =>
+                err_response(
+                    Error_Kind::UNKNOWN_REQUEST,
+                    "This server doesn't understand the request".to_string()),
+            Err(e) => panic!(e),
+        };
+
+        respond(s, resp).ok().unwrap();
+    }
+}
+
+fn err_response(kind: shipit_protocol::Error_Kind, msg: String) -> Response {
+    let mut r = Response::new();
+    r.mut_error().set_kind(kind);
+    r.mut_error().set_msg(msg);
+    r
+}
+
+#[inline]
+fn zmq_unwrap<A>(r: Result<A, zmq::Error>) -> A {
+    use std::error::Error;
+    match r {
+        Ok(msg) => msg,
+        Err(e) => panic!("ZMQ error: {}", e.description()),
     }
 }
 
 fn main() {
     let mut ctx = zmq::Context::new();
-    let mut s = ctx.socket(zmq::REP).ok().unwrap();
 
-    assert!(s.bind("tcp://*:1337").is_ok());
-    println!("Server started");
+    println!("Starting worker pool");
+    let mut workers = zmq_unwrap(ctx.socket(zmq::DEALER));
+    zmq_unwrap(workers.bind("inproc://workers"));
 
-    let mut state = GameState::new(256f64, 256f64);
-
-    loop {
-        let mut resp = Response::new();
-
-        match await(&mut s) {
-            Ok(req) => handle(&req, &mut resp, &mut state),
-            Err(ProtobufError::WireError(msg)) => {
-                resp.mut_error().set_kind(
-                    shipit_protocol::Error_Kind::WIRE_ERROR);
-                resp.mut_error().set_msg(msg);
-            },
-            Err(ProtobufError::IoError(e)) => {
-                resp.mut_error().set_kind(
-                    shipit_protocol::Error_Kind::IO_ERROR);
-                resp.mut_error().set_msg(e.to_string());
-            },
-        }
-
-        respond(&mut s, resp);
+    for i in range(0, 8) {
+        let mut worker = zmq_unwrap(ctx.socket(zmq::REP));
+        println!("Starting worker {}", i);
+        zmq_unwrap(worker.connect("inproc://workers"));
+        Thread::spawn(move || {
+            run_worker(i, &mut worker);
+        });
     }
+
+    let mut clients = zmq_unwrap(ctx.socket(zmq::ROUTER));
+    println!("Connecting to the world");
+    zmq_unwrap(clients.bind("tcp://*:1337"));
+    let supervisor = Thread::scoped(move || {
+        zmq::proxy(&mut clients, &mut workers);
+    });
+
+    println!("Server started");
+    supervisor.join().ok().unwrap();
 }

@@ -29,7 +29,8 @@ message Error {
     WIRE_ERROR = 1;
     IO_ERROR = 2;
     UNKNOWN_REQUEST = 3;
-    PLAYER_NAME_TAKEN = 4;
+    UNAUTHORIZED = 4;
+    PLAYER_NAME_TAKEN = 5;
   }
 
   required Kind kind = 1;
