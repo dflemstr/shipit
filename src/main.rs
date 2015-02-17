@@ -6,11 +6,11 @@ extern crate zmq;
 mod error;
 mod shipit_protocol;
 
+use std::boxed::BoxAny;
+use std::option::Option;
 use std::result::Result;
 use std::rt::unwind::try;
 use std::thread::Thread;
-use std::boxed::BoxAny;
-use std::option::Option;
 
 use protobuf::core::Message;
 use protobuf::error::ProtobufError;
@@ -39,6 +39,26 @@ struct Player {
     access_token: String,
 }
 
+fn
+
+fn handle(i: u32, req: &Request) -> Result<Response, Error> {
+    let mut resp = Response::new();
+
+    if req.has_identify() {
+        println!("Connected: {}", req.get_identify().get_name());
+        resp.mut_identified().set_access_token("abc123".to_string());
+
+        let (major, minor, patch) = zmq::version();
+        let info = format!("Served by worker {}, ZMQ version {}.{}.{}",
+                           i, major, minor, patch);
+
+        resp.mut_identified().set_server_info(info.to_string());
+    } else {
+        return Err(Error::UnknownRequest);
+    }
+
+    Ok(resp)
+}
 
 fn await(s: &mut Socket) -> Result<Request, Error> {
     let mut msg = try!(zmq::Message::new());
@@ -76,25 +96,6 @@ fn respond(s: &mut Socket, resp: Response) -> Result<(), Error> {
     let bytes = try!(resp.write_to_bytes());
     try!(s.send(bytes.as_slice(), 0));
     Ok(())
-}
-
-fn handle(i: u32, req: &Request) -> Result<Response, Error> {
-    let mut resp = Response::new();
-
-    if req.has_identify() {
-        println!("Connected: {}", req.get_identify().get_name());
-        resp.mut_identified().set_access_token("abc123".to_string());
-
-        let (major, minor, patch) = zmq::version();
-        let info = format!("Served by worker {}, ZMQ version {}.{}.{}",
-                           i, major, minor, patch);
-
-        resp.mut_identified().set_server_info(info.to_string());
-    } else {
-        return Err(Error::UnknownRequest);
-    }
-
-    Ok(resp)
 }
 
 fn await_and_handle(i: u32, s: &mut Socket) -> Result<Response, Error> {
@@ -149,17 +150,21 @@ fn main() {
         let mut worker = zmq_unwrap(ctx.socket(zmq::REP));
         println!("Starting worker {}", i);
         zmq_unwrap(worker.connect("inproc://workers"));
-        Thread::spawn(move || {
-            run_worker(i, &mut worker);
-        });
+        std::thread::Builder::new()
+            .name(format!("worker-{}", i).to_string())
+            .spawn(move || {
+                run_worker(i, &mut worker);
+            });
     }
 
     let mut clients = zmq_unwrap(ctx.socket(zmq::ROUTER));
     println!("Connecting to the world");
     zmq_unwrap(clients.bind("tcp://*:1337"));
-    let supervisor = Thread::scoped(move || {
-        zmq::proxy(&mut clients, &mut workers);
-    });
+    let supervisor = std::thread::Builder::new()
+        .name("supervisor".to_string())
+        .scoped(move || {
+            zmq::proxy(&mut clients, &mut workers);
+        });
 
     println!("Server started");
     supervisor.join().ok().unwrap();
