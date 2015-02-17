@@ -102,6 +102,13 @@ fn await_and_handle(i: u32, s: &mut Socket) -> Result<Response, Error> {
     Ok(resp)
 }
 
+fn err_response(kind: shipit_protocol::Error_Kind, msg: String) -> Response {
+    let mut r = Response::new();
+    r.mut_error().set_kind(kind);
+    r.mut_error().set_msg(msg);
+    r
+}
+
 fn run_worker(i: u32, s: &mut Socket) {
     loop {
         let resp = match await_and_handle(i, s) {
@@ -114,40 +121,31 @@ fn run_worker(i: u32, s: &mut Socket) {
                 err_response(
                     Error_Kind::UNKNOWN_REQUEST,
                     "This server doesn't understand the request".to_string()),
-            Err(e) => panic!(e),
+            Err(Error::ZMQ(zmq::Error::ETERM)) => {
+                println!("Context terminated! Worker {} shutting down", i);
+                return ();
+            },
+            Err(e) => panic!("Could not handle request: {}", e),
         };
 
-        respond(s, resp).ok().unwrap();
+        match respond(s, resp) {
+            Err(e) => panic!("Could not send reply to request: {}", e),
+            Ok(()) => (),
+        };
     }
 }
 
-fn err_response(kind: shipit_protocol::Error_Kind, msg: String) -> Response {
-    let mut r = Response::new();
-    r.mut_error().set_kind(kind);
-    r.mut_error().set_msg(msg);
-    r
-}
-
-#[inline]
-fn zmq_unwrap<A>(r: Result<A, zmq::Error>) -> A {
-    use std::error::Error;
-    match r {
-        Ok(msg) => msg,
-        Err(e) => panic!("ZMQ error: {}", e.description()),
-    }
-}
-
-fn main() {
+fn run_server() -> Result<(), Error> {
     let mut ctx = zmq::Context::new();
 
     println!("Starting worker pool");
-    let mut workers = zmq_unwrap(ctx.socket(zmq::DEALER));
-    zmq_unwrap(workers.bind("inproc://workers"));
+    let mut workers = try!(ctx.socket(zmq::DEALER));
+    try!(workers.bind("inproc://workers"));
 
     for i in range(0, 8) {
-        let mut worker = zmq_unwrap(ctx.socket(zmq::REP));
+        let mut worker = try!(ctx.socket(zmq::REP));
         println!("Starting worker {}", i);
-        zmq_unwrap(worker.connect("inproc://workers"));
+        try!(worker.connect("inproc://workers"));
         std::thread::Builder::new()
             .name(format!("worker-{}", i).to_string())
             .spawn(move || {
@@ -155,9 +153,9 @@ fn main() {
             });
     }
 
-    let mut clients = zmq_unwrap(ctx.socket(zmq::ROUTER));
+    let mut clients = try!(ctx.socket(zmq::ROUTER));
     println!("Connecting to the world");
-    zmq_unwrap(clients.bind("tcp://*:1337"));
+    try!(clients.bind("tcp://*:1337"));
     let supervisor = std::thread::Builder::new()
         .name("supervisor".to_string())
         .scoped(move || {
@@ -166,4 +164,12 @@ fn main() {
 
     println!("Server started");
     supervisor.join().ok().unwrap();
+    Ok(())
+}
+
+fn main() {
+    match run_server() {
+        Err(e) => panic!("Server crashed: {}", e),
+        Ok(()) => (),
+    };
 }
