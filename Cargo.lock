@@ -24,7 +24,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 [[package]]
 name = "protobuf"
 version = "0.0.9"
-source = "git+https://github.com/stepancheg/rust-protobuf.git#9b02c21b3fcda651074b5e5f52ed39dca96edbb8"
+source = "git+https://github.com/stepancheg/rust-protobuf.git#828e7b96eb917367fb9bd6a4acfb61928419bc75"
 
 [[package]]
 name = "rand"
@@ -47,7 +47,7 @@ dependencies = [
 [[package]]
 name = "zmq"
 version = "0.6.0"
-source = "git+https://github.com/dflemstr/rust-zmq.git#be5ebb24fadcf40aa08dd951c9f707e341ba44f0"
+source = "git+https://github.com/dflemstr/rust-zmq.git#da7d90508723ad63f87d0b6ec8cbcdf2545537dd"
 dependencies = [
  "rand 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "time 0.1.17 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -57,5 +57,5 @@ dependencies = [
 [[package]]
 name = "zmq-sys"
 version = "0.6.0"
-source = "git+https://github.com/dflemstr/rust-zmq.git#be5ebb24fadcf40aa08dd951c9f707e341ba44f0"
+source = "git+https://github.com/dflemstr/rust-zmq.git#da7d90508723ad63f87d0b6ec8cbcdf2545537dd"
 
