@@ -92,6 +92,10 @@ fn run_worker(i: u32, s: &mut Socket) {
                 err_response(
                     Error_Kind::UNKNOWN_REQUEST,
                     "This server doesn't understand the request".to_string()),
+            Err(Error::Unauthorized) =>
+                err_response(
+                    Error_Kind::UNAUTHORIZED,
+                    "You are missing or using an invalid access_token!".to_string()),
             Err(Error::ZMQ(zmq::Error::ETERM)) => {
                 println!("Context terminated! Worker {} shutting down", i);
                 return ();
