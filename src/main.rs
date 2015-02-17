@@ -96,11 +96,13 @@ fn run_worker(i: u32, s: &mut Socket) {
                 println!("Context terminated! Worker {} shutting down", i);
                 return ();
             },
-            Err(e) => panic!("Could not handle request: {}", e),
+            Err(e) =>
+                panic!("Worker {} crash, could not handle request: {}", i, e),
         };
 
         match respond(s, resp) {
-            Err(e) => panic!("Could not send reply to request: {}", e),
+            Err(e) =>
+                panic!("Worker {} crash, could not send reply: {}", i, e),
             Ok(()) => (),
         };
     }
