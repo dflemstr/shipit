@@ -39,8 +39,6 @@ struct Player {
     access_token: String,
 }
 
-fn
-
 fn handle(i: u32, req: &Request) -> Result<Response, Error> {
     let mut resp = Response::new();
 
