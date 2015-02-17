@@ -6,11 +6,7 @@ extern crate zmq;
 mod error;
 mod shipit_protocol;
 
-use std::boxed::BoxAny;
-use std::option::Option;
 use std::result::Result;
-use std::rt::unwind::try;
-use std::thread::Thread;
 
 use protobuf::core::Message;
 use protobuf::error::ProtobufError;
@@ -61,33 +57,8 @@ fn handle(i: u32, req: &Request) -> Result<Response, Error> {
 fn await(s: &mut Socket) -> Result<Request, Error> {
     let mut msg = try!(zmq::Message::new());
     try!(s.recv(&mut msg, 0));
-    unsafe {
-        // This is the most annoying thing ever; the protobuf library
-        // crashes on bad input.  We need to actually catch this error
-        // using super unsafe code
-
-        // If the try block doesn't set anything, this is the default
-        let mut parsed = Option::None;
-
-        // Isolate the execution
-        let r = try(|| {
-            parsed = Option::Some(
-                protobuf::parse_from_bytes::<Request>(msg.as_slice())
-                    .map_err(|e| Error::Protobuf(e)))
-        });
-
-        match r {
-            Err(e) => {
-                let m = e.downcast::<&str>().map(|b|*b)
-                    .ok().unwrap_or("Unknown error").to_string();
-                parsed = Option::Some(
-                    Err(Error::Protobuf(ProtobufError::WireError(m))))
-            },
-            _ => {}
-        }
-
-        parsed.unwrap()
-    }
+    let req = try!(protobuf::parse_from_bytes::<Request>(msg.as_slice()));
+    Ok(req)
 }
 
 fn respond(s: &mut Socket, resp: Response) -> Result<(), Error> {

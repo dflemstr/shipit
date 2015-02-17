@@ -14,7 +14,7 @@ use shipit_protocol::{Request, Response};
 fn send(s: &mut Socket, req: Request) -> Response {
     s.send(req.write_to_bytes().ok().unwrap().as_slice(), 0)
         .ok().unwrap();
-    parse_from_bytes(&s.recv_bytes(0).ok().unwrap().as_slice())
+    parse_from_bytes(s.recv_bytes(0).ok().unwrap().as_slice())
         .ok().unwrap()
 }
 
