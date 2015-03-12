@@ -5,6 +5,7 @@ extern crate env_logger;
 #[macro_use]
 extern crate log;
 extern crate protobuf;
+extern crate rand;
 extern crate zmq;
 
 mod error;
@@ -16,6 +17,8 @@ use std::result::Result;
 // Other libraries
 use protobuf::core::Message;
 use protobuf::error::ProtobufError;
+
+use rand::Rng;
 
 use zmq::Socket;
 
@@ -47,12 +50,13 @@ fn handle(i: u32, req: &Request) -> Result<Response, Error> {
 
     if req.has_identify() {
         info!("Connected: {}", req.get_identify().get_name());
-        resp.mut_identified().set_access_token("abc123".to_string());
+        let token = rand::thread_rng().gen_ascii_chars().take(32).collect();
 
         let (major, minor, patch) = zmq::version();
         let info = format!("Authenticated by worker {}, ZMQ version {}.{}.{}",
                            i, major, minor, patch);
 
+        resp.mut_identified().set_access_token(token);
         resp.mut_identified().set_server_info(info.to_string());
     } else {
         return Err(Error::UnknownRequest);

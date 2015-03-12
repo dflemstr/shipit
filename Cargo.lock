@@ -5,6 +5,7 @@ dependencies = [
  "env_logger 0.2.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.2.5 (registry+https://github.com/rust-lang/crates.io-index)",
  "protobuf 0.0.9 (git+https://github.com/stepancheg/rust-protobuf.git)",
+ "rand 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "zmq 0.6.1 (git+https://github.com/dflemstr/rust-zmq.git)",
 ]
 

@@ -13,6 +13,7 @@ git = "https://github.com/stepancheg/rust-protobuf.git"
 [dependencies]
 log = "0.2.5"
 env_logger = "0.2.2"
+rand = "0.2.0"
 
 [[example]]
 name = "simple"
