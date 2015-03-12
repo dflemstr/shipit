@@ -84,10 +84,10 @@ fn await_and_handle(i: u32, s: &mut Socket) -> Result<Response, Error> {
     Ok(resp)
 }
 
-fn err_response(kind: shipit_protocol::Error_Kind, msg: String) -> Response {
+fn err_response(kind: shipit_protocol::Error_Kind, msg: &str) -> Response {
     let mut r = Response::new();
     r.mut_error().set_kind(kind);
-    r.mut_error().set_msg(msg);
+    r.mut_error().set_msg(msg.to_string());
     r
 }
 
@@ -96,17 +96,17 @@ fn run_worker(i: u32, s: &mut Socket) {
         let resp = match await_and_handle(i, s) {
             Ok(r) => r,
             Err(Error::Protobuf(ProtobufError::WireError(msg))) =>
-                err_response(Error_Kind::WIRE_ERROR, msg),
+                err_response(Error_Kind::WIRE_ERROR, &msg),
             Err(Error::Protobuf(ProtobufError::IoError(e))) =>
-                err_response(Error_Kind::IO_ERROR, e.to_string()),
+                err_response(Error_Kind::IO_ERROR, e.description()),
             Err(Error::UnknownRequest) =>
                 err_response(
                     Error_Kind::UNKNOWN_REQUEST,
-                    "This server doesn't understand the request".to_string()),
+                    "This server doesn't understand the request"),
             Err(Error::Unauthorized) =>
                 err_response(
                     Error_Kind::UNAUTHORIZED,
-                    "You are missing or using an invalid access_token!".to_string()),
+                    "You are missing or using an invalid access_token!"),
             Err(Error::ZMQ(zmq::Error::ETERM)) => {
                 error!("Context terminated! Worker {} shutting down", i);
                 return ();
