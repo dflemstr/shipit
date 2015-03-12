@@ -1,4 +1,4 @@
-#![feature(alloc, core, std_misc)]
+#![feature(core, io)]
 
 extern crate protobuf;
 extern crate zmq;
@@ -43,7 +43,7 @@ fn handle(i: u32, req: &Request) -> Result<Response, Error> {
         resp.mut_identified().set_access_token("abc123".to_string());
 
         let (major, minor, patch) = zmq::version();
-        let info = format!("Served by worker {}, ZMQ version {}.{}.{}",
+        let info = format!("Authenticated by worker {}, ZMQ version {}.{}.{}",
                            i, major, minor, patch);
 
         resp.mut_identified().set_server_info(info.to_string());
@@ -123,24 +123,25 @@ fn run_server() -> Result<(), Error> {
         let mut worker = try!(ctx.socket(zmq::REP));
         println!("Starting worker {}", i);
         try!(worker.connect("inproc://workers"));
-        std::thread::Builder::new()
-            .name(format!("worker-{}", i).to_string())
-            .spawn(move || {
-                run_worker(i, &mut worker);
-            });
+        try!(std::thread::Builder::new()
+             .name(format!("worker-{}", i).to_string())
+             .spawn(move || {
+                 run_worker(i, &mut worker);
+             }));
     }
 
     let mut clients = try!(ctx.socket(zmq::ROUTER));
     println!("Connecting to the world");
     try!(clients.bind("tcp://*:1337"));
-    let supervisor = std::thread::Builder::new()
-        .name("supervisor".to_string())
-        .scoped(move || {
-            zmq::proxy(&mut clients, &mut workers);
-        });
+    let supervisor =
+        try!(std::thread::Builder::new()
+             .name("supervisor".to_string())
+             .scoped(move || {
+                 zmq::proxy(&mut clients, &mut workers).unwrap();
+             }));
 
     println!("Server started");
-    supervisor.join().ok().unwrap();
+    supervisor.join();
     Ok(())
 }
 

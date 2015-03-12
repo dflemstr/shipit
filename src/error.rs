@@ -5,9 +5,11 @@ use std::error;
 use std::error::FromError;
 use std::fmt;
 use std::fmt::{Display, Formatter};
+use std::io;
 
 #[derive(Debug)]
 pub enum Error {
+    IO(io::Error),
     Protobuf(protobuf::error::ProtobufError),
     ZMQ(zmq::Error),
     UnknownRequest,
@@ -17,6 +19,7 @@ pub enum Error {
 impl Display for Error {
     fn fmt(&self, f: &mut Formatter) -> Result<(), fmt::Error> {
         match self {
+            &Error::IO(ref e) => write!(f, "IO error: {}", e),
             &Error::Protobuf(ref e) => write!(f, "protobuf error: {}", e),
             &Error::ZMQ(ref e) => write!(f, "ZMQ error: {}", e),
             &Error::UnknownRequest => write!(f, "unknown request"),
@@ -28,6 +31,7 @@ impl Display for Error {
 impl error::Error for Error {
     fn description(&self) -> &str {
         match self {
+            &Error::IO(_) => "IO error",
             &Error::Protobuf(_) => "protobuf error",
             &Error::ZMQ(_) => "ZMQ error",
             &Error::UnknownRequest => "unknown request",
@@ -37,10 +41,17 @@ impl error::Error for Error {
 
     fn cause(&self) -> Option<&error::Error> {
         match self {
+            &Error::IO(ref e) => Option::Some(e),
             &Error::Protobuf(ref e) => Option::Some(e),
             &Error::ZMQ(ref e) => Option::Some(e),
             _ => Option::None,
         }
+    }
+}
+
+impl FromError<io::Error> for Error {
+    fn from_error(e: io::Error) -> Self {
+        Error::IO(e)
     }
 }
 

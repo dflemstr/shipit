@@ -3,12 +3,12 @@ name = "shipit"
 version = "0.0.1"
 dependencies = [
  "protobuf 0.0.9 (git+https://github.com/stepancheg/rust-protobuf.git)",
- "zmq 0.6.0 (git+https://github.com/dflemstr/rust-zmq.git)",
+ "zmq 0.6.1 (git+https://github.com/dflemstr/rust-zmq.git)",
 ]
 
 [[package]]
 name = "gcc"
-version = "0.1.7"
+version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 
 [[package]]
@@ -18,44 +18,44 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 
 [[package]]
 name = "log"
-version = "0.2.3"
+version = "0.2.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 
 [[package]]
 name = "protobuf"
 version = "0.0.9"
-source = "git+https://github.com/stepancheg/rust-protobuf.git#828e7b96eb917367fb9bd6a4acfb61928419bc75"
+source = "git+https://github.com/stepancheg/rust-protobuf.git#452f736c930ac8f7bc54382e487596f04e169de2"
 
 [[package]]
 name = "rand"
-version = "0.1.2"
+version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
  "libc 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)",
- "log 0.2.3 (registry+https://github.com/rust-lang/crates.io-index)",
+ "log 0.2.5 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
 name = "time"
-version = "0.1.17"
+version = "0.1.19"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
- "gcc 0.1.7 (registry+https://github.com/rust-lang/crates.io-index)",
+ "gcc 0.3.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "libc 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
 name = "zmq"
-version = "0.6.0"
-source = "git+https://github.com/dflemstr/rust-zmq.git#da7d90508723ad63f87d0b6ec8cbcdf2545537dd"
+version = "0.6.1"
+source = "git+https://github.com/dflemstr/rust-zmq.git#0a6bee9c09b13f90b5ec54e216b75d8cff66422d"
 dependencies = [
- "rand 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)",
- "time 0.1.17 (registry+https://github.com/rust-lang/crates.io-index)",
- "zmq-sys 0.6.0 (git+https://github.com/dflemstr/rust-zmq.git)",
+ "rand 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "time 0.1.19 (registry+https://github.com/rust-lang/crates.io-index)",
+ "zmq-sys 0.6.1 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
 name = "zmq-sys"
-version = "0.6.0"
-source = "git+https://github.com/dflemstr/rust-zmq.git#da7d90508723ad63f87d0b6ec8cbcdf2545537dd"
+version = "0.6.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
 
