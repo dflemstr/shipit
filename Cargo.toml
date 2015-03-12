@@ -10,6 +10,10 @@ git = "https://github.com/dflemstr/rust-zmq.git"
 [dependencies.protobuf]
 git = "https://github.com/stepancheg/rust-protobuf.git"
 
+[dependencies]
+log = "0.2.5"
+env_logger = "0.2.2"
+
 [[example]]
 name = "simple"
 path = "examples/simple/main.rs"

@@ -1,6 +1,9 @@
 #![crate_name = "simple"]
 #![feature(core)]
 
+extern crate env_logger;
+#[macro_use]
+extern crate log;
 extern crate protobuf;
 extern crate zmq;
 
@@ -18,18 +21,21 @@ fn send(s: &mut Socket, req: Request) -> Response {
         .ok().unwrap()
 }
 
+const ADDRESS: &'static str = "tcp://localhost:1337";
+
 fn main() {
-    println!("Connecting to server...");
+    env_logger::init().unwrap();
+    info!("Connecting to server on address {}", ADDRESS);
 
     let mut context = zmq::Context::new();
     let mut s = context.socket(zmq::REQ).ok().unwrap();
 
-    assert!(s.connect("tcp://localhost:1337").is_ok());
+    s.connect("tcp://localhost:1337").unwrap();
+    info!("Connected to server");
 
     let mut req = Request::new();
     req.mut_identify().set_name("dflemstr".to_string());
 
     let resp = send(&mut s, req);
-
     println!("Response: {:?}", resp);
 }

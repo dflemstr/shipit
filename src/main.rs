@@ -1,18 +1,25 @@
 #![feature(core, io)]
 
+// External stuff
+extern crate env_logger;
+#[macro_use]
+extern crate log;
 extern crate protobuf;
 extern crate zmq;
 
 mod error;
 mod shipit_protocol;
 
+// Standard library
 use std::result::Result;
 
+// Other libraries
 use protobuf::core::Message;
 use protobuf::error::ProtobufError;
 
 use zmq::Socket;
 
+// Modules
 use error::Error;
 
 use shipit_protocol::{Request, Response, Error_Kind};
@@ -39,7 +46,7 @@ fn handle(i: u32, req: &Request) -> Result<Response, Error> {
     let mut resp = Response::new();
 
     if req.has_identify() {
-        println!("Connected: {}", req.get_identify().get_name());
+        info!("Connected: {}", req.get_identify().get_name());
         resp.mut_identified().set_access_token("abc123".to_string());
 
         let (major, minor, patch) = zmq::version();
@@ -97,57 +104,67 @@ fn run_worker(i: u32, s: &mut Socket) {
                     Error_Kind::UNAUTHORIZED,
                     "You are missing or using an invalid access_token!".to_string()),
             Err(Error::ZMQ(zmq::Error::ETERM)) => {
-                println!("Context terminated! Worker {} shutting down", i);
+                error!("Context terminated! Worker {} shutting down", i);
                 return ();
             },
-            Err(e) =>
-                panic!("Worker {} crash, could not handle request: {}", i, e),
+            Err(e) => {
+                error!("Worker {} crash, could not handle request: {}", i, e);
+                return ();
+            },
         };
 
         match respond(s, resp) {
-            Err(e) =>
-                panic!("Worker {} crash, could not send reply: {}", i, e),
+            Err(e) => {
+                error!("Worker {} crash, could not send reply: {}", i, e);
+                return ();
+            },
             Ok(()) => (),
         };
     }
 }
 
+const ADDRESS: &'static str = "tcp://*:1337";
+
 fn run_server() -> Result<(), Error> {
     let mut ctx = zmq::Context::new();
 
-    println!("Starting worker pool");
+    info!("Starting server");
+
+    debug!("Starting worker pool");
     let mut workers = try!(ctx.socket(zmq::DEALER));
     try!(workers.bind("inproc://workers"));
 
     for i in range(0, 8) {
         let mut worker = try!(ctx.socket(zmq::REP));
-        println!("Starting worker {}", i);
         try!(worker.connect("inproc://workers"));
         try!(std::thread::Builder::new()
              .name(format!("worker-{}", i).to_string())
              .spawn(move || {
+                 debug!("Starting worker {}", i);
                  run_worker(i, &mut worker);
              }));
     }
 
     let mut clients = try!(ctx.socket(zmq::ROUTER));
-    println!("Connecting to the world");
-    try!(clients.bind("tcp://*:1337"));
+    debug!("Connecting to the world");
+    try!(clients.bind(ADDRESS));
     let supervisor =
         try!(std::thread::Builder::new()
              .name("supervisor".to_string())
              .scoped(move || {
+                 debug!("Dispatching worker requests");
                  zmq::proxy(&mut clients, &mut workers).unwrap();
              }));
 
-    println!("Server started");
+    info!("Server started on address {}", ADDRESS);
     supervisor.join();
     Ok(())
 }
 
 fn main() {
+    env_logger::init().unwrap();
     match run_server() {
-        Err(e) => panic!("Server crashed: {}", e),
+        Err(e) => error!("Server crashed: {}", e),
         Ok(()) => (),
     };
 }
