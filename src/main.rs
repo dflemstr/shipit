@@ -13,6 +13,7 @@ mod shipit_protocol;
 
 // Standard library
 use std::result::Result;
+use std::sync::{Arc,RwLock};
 
 // Other libraries
 use protobuf::core::Message;
@@ -45,24 +46,47 @@ struct Player {
     access_token: String,
 }
 
-fn handle(i: u32, req: &Request) -> Result<Response, Error> {
-    let mut resp = Response::new();
-
+fn handle(i: u32, state_ref: &Arc<RwLock<GameState>>, req: &Request)
+          -> Result<Response, Error> {
+    let mut state = (*state_ref).write().unwrap();
     if req.has_identify() {
-        info!("Connected: {}", req.get_identify().get_name());
-        let token = rand::thread_rng().gen_ascii_chars().take(32).collect();
+        let identify = req.get_identify();
 
-        let (major, minor, patch) = zmq::version();
-        let info = format!("Authenticated by worker {}, ZMQ version {}.{}.{}",
-                           i, major, minor, patch);
+        if player_by_name(&state.players, identify.get_name()).is_none() {
+            info!("Connected: {}", identify.get_name());
+            let token: String =
+                rand::thread_rng().gen_ascii_chars().take(32).collect();
 
-        resp.mut_identified().set_access_token(token);
-        resp.mut_identified().set_server_info(info.to_string());
+            state.players.push(Player {
+                name: identify.get_name().to_string(),
+                access_token: token.clone(),
+            });
+
+            let (major, minor, patch) = zmq::version();
+            let info = format!("Authenticated by worker {}, ZMQ version {}.{}.{}",
+                               i, major, minor, patch);
+
+            let mut resp = Response::new();
+            resp.mut_identified().set_access_token(token);
+            resp.mut_identified().set_server_info(info.to_string());
+            Ok(resp)
+        } else {
+            Ok(err_response(
+                Error_Kind::PLAYER_NAME_TAKEN,
+                &format!("Player {:?} already exists!", identify.get_name())))
+        }
     } else {
-        return Err(Error::UnknownRequest);
+        Err(Error::UnknownRequest)
     }
+}
 
-    Ok(resp)
+fn player_by_name<'a>(players: &'a [Player], name: &str) -> Option<&'a Player> {
+    for ref player in players.iter() {
+        if player.name.as_slice() == name {
+            return Option::Some(player);
+        }
+    }
+    Option::None
 }
 
 fn await(s: &mut Socket) -> Result<Request, Error> {
@@ -78,9 +102,10 @@ fn respond(s: &mut Socket, resp: Response) -> Result<(), Error> {
     Ok(())
 }
 
-fn await_and_handle(i: u32, s: &mut Socket) -> Result<Response, Error> {
+fn await_and_handle(i: u32, state_ref: &Arc<RwLock<GameState>>, s: &mut Socket)
+                    -> Result<Response, Error> {
     let req = try!(await(s));
-    let resp = try!(handle(i, &req));
+    let resp = try!(handle(i, state_ref, &req));
     Ok(resp)
 }
 
@@ -91,9 +116,9 @@ fn err_response(kind: shipit_protocol::Error_Kind, msg: &str) -> Response {
     r
 }
 
-fn run_worker(i: u32, s: &mut Socket) {
+fn run_worker(i: u32, state_ref: &Arc<RwLock<GameState>>, s: &mut Socket) {
     loop {
-        let resp = match await_and_handle(i, s) {
+        let resp = match await_and_handle(i, state_ref, s) {
             Ok(r) => r,
             Err(Error::Protobuf(ProtobufError::WireError(msg))) =>
                 err_response(Error_Kind::WIRE_ERROR, &msg),
@@ -133,6 +158,7 @@ fn run_server() -> Result<(), Error> {
     let mut ctx = zmq::Context::new();
 
     info!("Starting server");
+    let state_ref = Arc::new(RwLock::new(GameState::new(1024f64, 1024f64)));
 
     debug!("Starting worker pool");
     let mut workers = try!(ctx.socket(zmq::DEALER));
@@ -140,12 +166,13 @@ fn run_server() -> Result<(), Error> {
 
     for i in range(0, 8) {
         let mut worker = try!(ctx.socket(zmq::REP));
+        let worker_state_ref = state_ref.clone();
         try!(worker.connect("inproc://workers"));
         try!(std::thread::Builder::new()
              .name(format!("worker-{}", i).to_string())
              .spawn(move || {
                  debug!("Starting worker {}", i);
-                 run_worker(i, &mut worker);
+                 run_worker(i, &worker_state_ref, &mut worker);
              }));
     }
 
