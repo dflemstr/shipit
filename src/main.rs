@@ -1,4 +1,4 @@
-#![feature(core, io)]
+#![feature(core, convert)]
 
 // External stuff
 extern crate env_logger;
@@ -123,7 +123,8 @@ fn run_worker(i: u32, state_ref: &Arc<RwLock<GameState>>, s: &mut Socket) {
             Err(Error::Protobuf(ProtobufError::WireError(msg))) =>
                 err_response(Error_Kind::WIRE_ERROR, &msg),
             Err(Error::Protobuf(ProtobufError::IoError(e))) =>
-                err_response(Error_Kind::IO_ERROR, e.description()),
+                err_response(Error_Kind::IO_ERROR,
+                             std::error::Error::description(&e)),
             Err(Error::UnknownRequest) =>
                 err_response(
                     Error_Kind::UNKNOWN_REQUEST,
@@ -164,7 +165,7 @@ fn run_server() -> Result<(), Error> {
     let mut workers = try!(ctx.socket(zmq::DEALER));
     try!(workers.bind("inproc://workers"));
 
-    for i in range(0, 8) {
+    for i in 0..8 {
         let mut worker = try!(ctx.socket(zmq::REP));
         let worker_state_ref = state_ref.clone();
         try!(worker.connect("inproc://workers"));

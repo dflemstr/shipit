@@ -8,12 +8,12 @@ authors = ["David Flemström <david.flemstrom@gmail.com>"]
 git = "https://github.com/dflemstr/rust-zmq.git"
 
 [dependencies.protobuf]
-git = "https://github.com/stepancheg/rust-protobuf.git"
+git = "https://github.com/dflemstr/rust-protobuf.git"
 
 [dependencies]
-log = "0.2.5"
-env_logger = "0.2.2"
-rand = "0.2.0"
+log = "0.3.1"
+env_logger = "0.3.0"
+rand = "0.3.7"
 
 [[example]]
 name = "simple"

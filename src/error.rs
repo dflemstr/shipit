@@ -2,7 +2,7 @@ extern crate protobuf;
 extern crate zmq;
 
 use std::error;
-use std::error::FromError;
+use std::convert::From;
 use std::fmt;
 use std::fmt::{Display, Formatter};
 use std::io;
@@ -49,20 +49,20 @@ impl error::Error for Error {
     }
 }
 
-impl FromError<io::Error> for Error {
-    fn from_error(e: io::Error) -> Self {
+impl From<io::Error> for Error {
+    fn from(e: io::Error) -> Self {
         Error::IO(e)
     }
 }
 
-impl FromError<zmq::Error> for Error {
-    fn from_error(e: zmq::Error) -> Self {
+impl From<zmq::Error> for Error {
+    fn from(e: zmq::Error) -> Self {
         Error::ZMQ(e)
     }
 }
 
-impl FromError<protobuf::error::ProtobufError> for Error {
-    fn from_error(e: protobuf::error::ProtobufError) -> Self {
+impl From<protobuf::error::ProtobufError> for Error {
+    fn from(e: protobuf::error::ProtobufError) -> Self {
         Error::Protobuf(e)
     }
 }
