@@ -6,6 +6,7 @@ dependencies = [
  "log 0.3.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "protobuf 0.0.9 (git+https://github.com/dflemstr/rust-protobuf.git)",
  "rand 0.3.7 (registry+https://github.com/rust-lang/crates.io-index)",
+ "time 0.1.24 (registry+https://github.com/rust-lang/crates.io-index)",
  "zmq 0.6.5 (git+https://github.com/dflemstr/rust-zmq.git)",
 ]
 

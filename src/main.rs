@@ -6,6 +6,7 @@ extern crate env_logger;
 extern crate log;
 extern crate protobuf;
 extern crate rand;
+extern crate time;
 extern crate zmq;
 
 mod error;
@@ -14,6 +15,7 @@ mod shipit_protocol;
 // Standard library
 use std::result::Result;
 use std::sync::{Arc,RwLock};
+use std::thread;
 
 // Other libraries
 use protobuf::core::Message;
@@ -21,12 +23,17 @@ use protobuf::error::ProtobufError;
 
 use rand::Rng;
 
+use time::Duration;
+use time::SteadyTime;
+
 use zmq::Socket;
 
 // Modules
 use error::Error;
 
 use shipit_protocol::{Request, Response, Error_Kind};
+
+const ADDRESS: &'static str = "tcp://*:1337";
 
 struct GameState {
     players: Vec<Player>,
@@ -44,6 +51,7 @@ impl GameState {
 struct Player {
     name: String,
     access_token: String,
+    last_seen: SteadyTime,
 }
 
 fn handle(i: u32, state_ref: &Arc<RwLock<GameState>>, req: &Request)
@@ -53,13 +61,14 @@ fn handle(i: u32, state_ref: &Arc<RwLock<GameState>>, req: &Request)
         let identify = req.get_identify();
 
         if player_by_name(&state.players, identify.get_name()).is_none() {
-            info!("Connected: {}", identify.get_name());
+            info!("Connected: {:?}", identify.get_name());
             let token: String =
                 rand::thread_rng().gen_ascii_chars().take(32).collect();
 
             state.players.push(Player {
                 name: identify.get_name().to_string(),
                 access_token: token.clone(),
+                last_seen: SteadyTime::now(),
             });
 
             let (major, minor, patch) = zmq::version();
@@ -153,13 +162,41 @@ fn run_worker(i: u32, state_ref: &Arc<RwLock<GameState>>, s: &mut Socket) {
     }
 }
 
-const ADDRESS: &'static str = "tcp://*:1337";
+fn run_simulation(state_ref: &Arc<RwLock<GameState>>) {
+    let inactivity_timeout = Duration::seconds(10);
+    loop {
+        let mut state = (*state_ref).write().unwrap();
+        let now = SteadyTime::now();
+
+        // Evict inactive players
+        state.players.retain(|ref p| {
+            if (now - p.last_seen < inactivity_timeout) {
+                true
+            } else {
+                info!("Evicting player {:?} due to {} timeout",
+                      p.name, inactivity_timeout);
+                false
+            }
+        });
+
+        thread::sleep_ms(1);
+    }
+}
 
 fn run_server() -> Result<(), Error> {
     let mut ctx = zmq::Context::new();
 
     info!("Starting server");
     let state_ref = Arc::new(RwLock::new(GameState::new(1024f64, 1024f64)));
+
+    let simulation_state_ref = state_ref.clone();
+    let simulation =
+        try!(std::thread::Builder::new()
+             .name("simulation".to_string())
+             .scoped(move || {
+                 debug!("Starting simulation");
+                 run_simulation(&simulation_state_ref);
+             }));
 
     debug!("Starting worker pool");
     let mut workers = try!(ctx.socket(zmq::DEALER));
@@ -189,7 +226,8 @@ fn run_server() -> Result<(), Error> {
              }));
 
     info!("Server started on address {}", ADDRESS);
-    supervisor.join();
+    drop(supervisor);
+    drop(simulation);
     Ok(())
 }
 

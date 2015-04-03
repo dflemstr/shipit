@@ -1,5 +1,5 @@
 #![crate_name = "simple"]
-#![feature(core)]
+#![feature(core, convert)]
 
 extern crate env_logger;
 #[macro_use]
