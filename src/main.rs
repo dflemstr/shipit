@@ -84,18 +84,40 @@ fn handle(i: u32, state_ref: &Arc<RwLock<GameState>>, req: &Request)
                 Error_Kind::PLAYER_NAME_TAKEN,
                 &format!("Player {:?} already exists!", identify.get_name())))
         }
+    } else if req.has_ping() {
+        if req.has_access_token() {
+            match mut_player_by_access_token(&mut state.players,
+                                             req.get_access_token()) {
+                Option::Some(player) => {
+                    debug!("Player {:?} bumped last_seen", player.name);
+                    player.last_seen = SteadyTime::now();
+                    let mut resp = Response::new();
+                    resp.mut_pong();
+                    Ok(resp)
+                },
+                Option::None => {
+                    Ok(err_response(
+                        Error_Kind::UNAUTHORIZED,
+                        &format!("No player with that access token")))
+                },
+            }
+        } else {
+            Ok(err_response(
+                Error_Kind::UNAUTHORIZED,
+                &format!("No access token specified")))
+        }
     } else {
         Err(Error::UnknownRequest)
     }
 }
 
-fn player_by_name<'a>(players: &'a [Player], name: &str) -> Option<&'a Player> {
-    for ref player in players.iter() {
-        if player.name.as_slice() == name {
-            return Option::Some(player);
-        }
-    }
-    Option::None
+fn mut_player_by_access_token<'a>(players: &'a mut [Player], access_token: &str)
+                              -> Option<&'a mut Player> {
+    players.iter_mut().find(|p| p.access_token.as_slice() == access_token)
+}
+
+fn player_by_name<'a>(players: &'a[Player], name: &str) -> Option<&'a Player> {
+    players.iter().find(|p| p.name.as_slice() == name)
 }
 
 fn await(s: &mut Socket) -> Result<Request, Error> {
@@ -170,7 +192,7 @@ fn run_simulation(state_ref: &Arc<RwLock<GameState>>) {
 
         // Evict inactive players
         state.players.retain(|ref p| {
-            if (now - p.last_seen < inactivity_timeout) {
+            if now - p.last_seen < inactivity_timeout {
                 true
             } else {
                 info!("Evicting player {:?} due to {} timeout",
@@ -202,7 +224,7 @@ fn run_server() -> Result<(), Error> {
     let mut workers = try!(ctx.socket(zmq::DEALER));
     try!(workers.bind("inproc://workers"));
 
-    for i in 0..8 {
+    for i in 0..4 {
         let mut worker = try!(ctx.socket(zmq::REP));
         let worker_state_ref = state_ref.clone();
         try!(worker.connect("inproc://workers"));

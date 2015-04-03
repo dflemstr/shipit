@@ -3,6 +3,7 @@ message Request {
   oneof msg {
     Error error = 1;
     Identify identify = 2;
+    Ping ping = 3;
   }
   optional string access_token = 64;
 }
@@ -11,17 +12,24 @@ message Identify {
   optional string name = 1;
 }
 
+message Ping {
+}
+
 // Responses
 message Response {
   oneof msg {
     Error error = 1;
     Identified identified = 2;
+    Pong pong = 3;
   }
 }
 
 message Identified {
   required string access_token = 1;
   optional string server_info = 2;
+}
+
+message Pong {
 }
 
 message Error {

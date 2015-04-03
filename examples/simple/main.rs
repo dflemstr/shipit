@@ -38,4 +38,13 @@ fn main() {
 
     let resp = send(&mut s, req);
     println!("Response: {:?}", resp);
+    let identified = resp.get_identified();
+
+    loop {
+        let mut ping = Request::new();
+        ping.set_access_token(identified.get_access_token().to_string());
+        ping.mut_ping();
+        let pong = send(&mut s, ping);
+        println!("Ping response: {:?}", pong);
+    }
 }
