@@ -40,10 +40,12 @@ fn main() {
     println!("Response: {:?}", resp);
     let identified = resp.get_identified();
 
+    let mut counter = 0;
     loop {
         let mut ping = Request::new();
         ping.set_access_token(identified.get_access_token().to_string());
-        ping.mut_ping();
+        ping.mut_ping().set_payload(format!("{}", counter).into_bytes());
+        counter = counter + 1;
         let pong = send(&mut s, ping);
         println!("Ping response: {:?}", pong);
     }

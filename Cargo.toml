@@ -6,6 +6,7 @@ authors = ["David Flemström <david.flemstrom@gmail.com>"]
 
 [dependencies.zmq]
 git = "https://github.com/dflemstr/rust-zmq.git"
+branch = "timeouts"
 
 [dependencies.protobuf]
 git = "https://github.com/dflemstr/rust-protobuf.git"

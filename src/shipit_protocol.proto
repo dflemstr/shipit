@@ -4,6 +4,7 @@ message Request {
     Error error = 1;
     Identify identify = 2;
     Ping ping = 3;
+    Disconnect disconnect = 4;
   }
   optional string access_token = 64;
 }
@@ -13,6 +14,10 @@ message Identify {
 }
 
 message Ping {
+  optional bytes payload = 1;
+}
+
+message Disconnect {
 }
 
 // Responses
@@ -21,6 +26,7 @@ message Response {
     Error error = 1;
     Identified identified = 2;
     Pong pong = 3;
+    Disconnected disconnected = 4;
   }
 }
 
@@ -30,6 +36,10 @@ message Identified {
 }
 
 message Pong {
+  optional bytes payload = 1;
+}
+
+message Disconnected {
 }
 
 message Error {
