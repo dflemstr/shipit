@@ -13,6 +13,8 @@ use protocol::{Request, Response, Error_Kind};
 use state::{GameState, Player};
 use util::err_response;
 
+const SCAN_DISTANCE: f64 = 100.0;
+
 pub fn handle(req: &Request, state: &mut GameState) -> Result<Response, Error> {
     if req.has_identify() {
         handle_identify(req.get_identify(), state)
@@ -25,6 +27,8 @@ pub fn handle(req: &Request, state: &mut GameState) -> Result<Response, Error> {
             handle_disconnect(state, token)
         } else if req.has_update() {
             handle_update(req.get_update(), state, token)
+        } else if req.has_scan() {
+            handle_scan(req.get_scan(), state, token)
         } else {
             Err(Error::UnknownRequest)
         }
@@ -112,5 +116,30 @@ fn handle_update(update: &protocol::Update,
     updated.set_angular_velocity(player.angular_velocity);
 
     resp.set_updated(updated);
+    Ok(resp)
+}
+
+fn handle_scan(scan: &protocol::Scan,
+               state: &mut GameState,
+               token: &str) -> Result<Response, Error> {
+    let player = state.players.get(token).unwrap();
+    let mut scanned = protocol::Scanned::new();
+
+    for (other_token, other_player) in state.players.iter() {
+        let dx = player.x - other_player.x;
+        let dy = player.y - other_player.y;
+        let distance = (dx*dx + dy*dy).sqrt();
+
+        if distance < SCAN_DISTANCE && token != other_token.as_str() {
+            let mut hit = protocol::Scanned_Hit::new();
+            hit.set_distance(distance);
+            hit.set_angle(dy.atan2(dx) - player.direction);
+            scanned.mut_hit().push(hit);
+        }
+    }
+
+    let mut resp = Response::new();
+    resp.set_scanned(scanned);
+
     Ok(resp)
 }

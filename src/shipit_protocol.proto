@@ -6,6 +6,7 @@ message Request {
     Ping ping = 3;
     Disconnect disconnect = 4;
     Update update = 5;
+    Scan scan = 6;
   }
   optional string access_token = 64;
 }
@@ -25,6 +26,9 @@ message Update {
   optional double angular_velocity = 1;
 }
 
+message Scan {
+}
+
 // Responses
 message Response {
   oneof msg {
@@ -33,6 +37,7 @@ message Response {
     Pong pong = 3;
     Disconnected disconnected = 4;
     Updated updated = 5;
+    Scanned scanned = 6;
   }
 }
 
@@ -49,7 +54,16 @@ message Disconnected {
 }
 
 message Updated {
-    optional double angular_velocity = 1;
+  required double angular_velocity = 1;
+}
+
+message Scanned {
+  message Hit {
+    required double distance = 1;
+    required double angle = 2;
+  }
+
+  repeated Hit hit = 1;
 }
 
 message Error {
