@@ -5,6 +5,7 @@ message Request {
     Identify identify = 2;
     Ping ping = 3;
     Disconnect disconnect = 4;
+    Update update = 5;
   }
   optional string access_token = 64;
 }
@@ -20,6 +21,10 @@ message Ping {
 message Disconnect {
 }
 
+message Update {
+  optional double angular_velocity = 1;
+}
+
 // Responses
 message Response {
   oneof msg {
@@ -27,6 +32,7 @@ message Response {
     Identified identified = 2;
     Pong pong = 3;
     Disconnected disconnected = 4;
+    Updated updated = 5;
   }
 }
 
@@ -40,6 +46,10 @@ message Pong {
 }
 
 message Disconnected {
+}
+
+message Updated {
+    optional double angular_velocity = 1;
 }
 
 message Error {

@@ -23,6 +23,8 @@ pub fn handle(req: &Request, state: &mut GameState) -> Result<Response, Error> {
             handle_ping(req.get_ping())
         } else if req.has_disconnect() {
             handle_disconnect(state, token)
+        } else if req.has_update() {
+            handle_update(req.get_update(), state, token)
         } else {
             Err(Error::UnknownRequest)
         }
@@ -93,5 +95,22 @@ fn handle_disconnect(state: &mut GameState,
 
     let mut resp = Response::new();
     resp.set_disconnected(protocol::Disconnected::new());
+    Ok(resp)
+}
+
+fn handle_update(update: &protocol::Update,
+                 state: &mut GameState,
+                 token: &str) -> Result<Response, Error> {
+    let player = state.players.get_mut(token).unwrap();
+
+    if update.has_angular_velocity() {
+        player.angular_velocity = update.get_angular_velocity();
+    }
+
+    let mut resp = Response::new();
+    let mut updated = protocol::Updated::new();
+    updated.set_angular_velocity(player.angular_velocity);
+
+    resp.set_updated(updated);
     Ok(resp)
 }

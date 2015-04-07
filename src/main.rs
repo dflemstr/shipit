@@ -36,6 +36,8 @@ use util::err_response;
 
 const ADDRESS: &'static str = "tcp://*:1337";
 
+const SHIP_SPEED: f64 = 128.0;
+
 fn handle_msg(msg: &zmq::Message, state: &mut GameState) -> Result<Response, Error> {
     let req = try!(protobuf::parse_from_bytes::<Request>(msg.as_slice()));
     let resp = try!(handler::handle(&req, state));
@@ -104,11 +106,26 @@ fn poll_req(server: &mut Socket, msg: &mut zmq::Message, state: &mut GameState) 
 }
 
 fn tick(state: &mut GameState, now: &SteadyTime, d: &Duration) {
-    trace!("Tick, delta: {}", d);
-
     if *d == Duration::zero() {
-        warn!("Tick of zero duration; the system timer is probably borked");
+        warn!("Tick of zero duration; the system timer is probably lo-res");
         return;
+    }
+
+    let delta = d.num_nanoseconds().map_or(std::f64::MAX, |n| n as f64 / 1e9);
+
+    for (_, player) in state.players.iter_mut() {
+        player.direction =
+            (player.direction + player.angular_velocity * delta)
+            % std::f64::consts::PI_2;
+
+        player.x =
+            (player.x + SHIP_SPEED * player.direction.cos() * delta)
+            % state.width;
+        player.y =
+            (player.y + SHIP_SPEED * player.direction.sin() * delta)
+            % state.height;
+
+        trace!("Player updated: {:?}", player);
     }
 }
 

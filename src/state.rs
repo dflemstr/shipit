@@ -2,6 +2,7 @@ use std::collections::HashMap;
 
 use time::SteadyTime;
 
+#[derive(Debug)]
 pub struct GameState {
     // Access token → player
     pub players: HashMap<String, Player>,
@@ -21,6 +22,7 @@ impl GameState {
     }
 }
 
+#[derive(Debug)]
 pub struct Player {
     pub name: String,
     pub last_seen: SteadyTime,
@@ -29,7 +31,7 @@ pub struct Player {
     pub y: f64,
 
     pub direction: f64,
-    pub ang_vel: f64,
+    pub angular_velocity: f64,
 }
 
 impl Player {
@@ -42,7 +44,7 @@ impl Player {
             y: 0.0,
 
             direction: 0.0,
-            ang_vel: 0.0,
+            angular_velocity: 0.0,
         }
     }
 }
