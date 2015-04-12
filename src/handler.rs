@@ -7,46 +7,49 @@ use time::SteadyTime;
 use zmq;
 
 // Modules
-use error::Error;
+use error::{Error, UnauthReason};
 use protocol;
 use protocol::{Request, Response, Error_Kind};
+use settings::*;
 use state::{GameState, Player};
 use util::err_response;
 
-const SCAN_DISTANCE: f64 = 100.0;
-
-pub fn handle(req: &Request, state: &mut GameState) -> Result<Response, Error> {
+pub fn handle(req: &Request,
+              now: &SteadyTime,
+              state: &mut GameState) -> Result<Response, Error> {
     if req.has_identify() {
         handle_identify(req.get_identify(), state)
     } else {
-        let token = try!(auth_player(state, req));
+        let index = try!(auth_player(req, now, state));
 
         if req.has_ping() {
             handle_ping(req.get_ping())
         } else if req.has_disconnect() {
-            handle_disconnect(state, token)
+            handle_disconnect(state, index)
         } else if req.has_update() {
-            handle_update(req.get_update(), state, token)
+            handle_update(req.get_update(), state, index)
         } else if req.has_scan() {
-            handle_scan(req.get_scan(), state, token)
+            handle_scan(state, index)
         } else {
             Err(Error::UnknownRequest)
         }
     }
 }
 
-fn auth_player<'a>(state: &mut GameState, req: &'a Request) -> Result<&'a str, Error> {
+fn auth_player(req: &Request,
+               now: &SteadyTime,
+               state: &mut GameState) -> Result<usize, Error> {
     if req.has_access_token() {
         let token = req.get_access_token();
-        match state.players.get_mut(token) {
-            Option::Some(ref mut player) => {
-                player.last_seen = SteadyTime::now();
-                Ok(token)
+        match state.players.iter_mut().enumerate().find(|&(_, ref p)| p.access_token == token) {
+            Option::Some((i, ref mut player)) => {
+                player.last_seen = now.clone();
+                Ok(i)
             },
-            Option::None => Err(Error::Unauthorized),
+            Option::None => Err(Error::Unauthorized(UnauthReason::NoSuchToken)),
         }
     } else {
-        Err(Error::Unauthorized)
+        Err(Error::Unauthorized(UnauthReason::NoTokenSpecified))
     }
 }
 
@@ -55,8 +58,8 @@ fn handle_identify(identify: &protocol::Identify,
 
     let name = identify.get_name();
     let is_new_player =
-        state.players.values()
-        .find(|p| p.name.as_slice() == name)
+        state.players.iter()
+        .find(|ref p| p.name == name)
         .is_none();
 
     if is_new_player {
@@ -64,7 +67,7 @@ fn handle_identify(identify: &protocol::Identify,
         let token: String =
             rand::thread_rng().gen_ascii_chars().take(16).collect();
 
-        state.players.insert(token.clone(), Player::new(name.to_string()));
+        state.players.push(Player::new(name.to_string(), token.clone()));
 
         let (major, minor, patch) = zmq::version();
         let info = format!("Authenticated, ZMQ version {}.{}.{}",
@@ -94,8 +97,8 @@ fn handle_ping(ping: &protocol::Ping) -> Result<Response, Error> {
 }
 
 fn handle_disconnect(state: &mut GameState,
-                     token: &str) -> Result<Response, Error> {
-    state.players.remove(token);
+                     index: usize) -> Result<Response, Error> {
+    state.players.swap_remove(index);
 
     let mut resp = Response::new();
     resp.set_disconnected(protocol::Disconnected::new());
@@ -104,8 +107,8 @@ fn handle_disconnect(state: &mut GameState,
 
 fn handle_update(update: &protocol::Update,
                  state: &mut GameState,
-                 token: &str) -> Result<Response, Error> {
-    let player = state.players.get_mut(token).unwrap();
+                 index: usize) -> Result<Response, Error> {
+    let player = &mut state.players[index];
 
     if update.has_angular_velocity() {
         player.angular_velocity = update.get_angular_velocity();
@@ -119,18 +122,17 @@ fn handle_update(update: &protocol::Update,
     Ok(resp)
 }
 
-fn handle_scan(scan: &protocol::Scan,
-               state: &mut GameState,
-               token: &str) -> Result<Response, Error> {
-    let player = state.players.get(token).unwrap();
+fn handle_scan(state: &mut GameState,
+               index: usize) -> Result<Response, Error> {
+    let player = &state.players[index];
     let mut scanned = protocol::Scanned::new();
 
-    for (other_token, other_player) in state.players.iter() {
+    for (other_index, other_player) in state.players.iter().enumerate() {
         let dx = player.x - other_player.x;
         let dy = player.y - other_player.y;
         let distance = (dx*dx + dy*dy).sqrt();
 
-        if distance < SCAN_DISTANCE && token != other_token.as_str() {
+        if distance < SHIP_SCAN_DISTANCE && index != other_index {
             let mut hit = protocol::Scanned_Hit::new();
             hit.set_distance(distance);
             hit.set_angle(dy.atan2(dx) - player.direction);

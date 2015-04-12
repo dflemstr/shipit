@@ -13,7 +13,13 @@ pub enum Error {
     Protobuf(protobuf::error::ProtobufError),
     ZMQ(zmq::Error),
     UnknownRequest,
-    Unauthorized,
+    Unauthorized(UnauthReason),
+}
+
+#[derive(Debug)]
+pub enum UnauthReason {
+    NoTokenSpecified,
+    NoSuchToken,
 }
 
 impl Display for Error {
@@ -23,7 +29,10 @@ impl Display for Error {
             &Error::Protobuf(ref e) => write!(f, "protobuf error: {}", e),
             &Error::ZMQ(ref e) => write!(f, "ZMQ error: {}", e),
             &Error::UnknownRequest => write!(f, "unknown request"),
-            &Error::Unauthorized => write!(f, "unauthorized"),
+            &Error::Unauthorized(UnauthReason::NoTokenSpecified) =>
+                write!(f, "unauthorized: no token specified"),
+            &Error::Unauthorized(UnauthReason::NoSuchToken) =>
+                write!(f, "unauthorized: no such token"),
         }
     }
 }
@@ -35,7 +44,10 @@ impl error::Error for Error {
             &Error::Protobuf(_) => "protobuf error",
             &Error::ZMQ(_) => "ZMQ error",
             &Error::UnknownRequest => "unknown request",
-            &Error::Unauthorized => "unauthorized",
+            &Error::Unauthorized(UnauthReason::NoTokenSpecified) =>
+                "unauthorized: no token specified",
+            &Error::Unauthorized(UnauthReason::NoSuchToken) =>
+                "unauthorized: no such token",
         }
     }
 

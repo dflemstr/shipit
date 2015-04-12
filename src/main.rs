@@ -14,6 +14,7 @@ mod handler;
 mod state;
 mod protocol;
 mod shipit_protocol;
+mod settings;
 mod util;
 
 // Standard library
@@ -29,18 +30,17 @@ use time::SteadyTime;
 use zmq::Socket;
 
 // Modules
-use error::Error;
+use error::{Error, UnauthReason};
 use protocol::{Request, Response, Error_Kind};
-use state::GameState;
+use settings::*;
+use state::{GameState, Players};
 use util::err_response;
 
-const ADDRESS: &'static str = "tcp://*:1337";
-
-const SHIP_SPEED: f64 = 128.0;
-
-fn handle_msg(msg: &zmq::Message, state: &mut GameState) -> Result<Response, Error> {
-    let req = try!(protobuf::parse_from_bytes::<Request>(msg.as_slice()));
-    let resp = try!(handler::handle(&req, state));
+fn handle_msg(msg: &zmq::Message,
+              now: &SteadyTime,
+              state: &mut GameState) -> Result<Response, Error> {
+    let req = try!(protobuf::parse_from_bytes::<Request>(msg.as_ref()));
+    let resp = try!(handler::handle(&req, now, state));
     Ok(resp)
 }
 
@@ -58,27 +58,18 @@ fn respond(s: &mut Socket, resp: Response) -> Result<(), Error> {
     Ok(())
 }
 
-fn evict_players(state: &mut GameState,
+fn evict_players(players: &mut Players,
                  now: &SteadyTime,
                  inactivity_timeout: &Duration) {
-    let mut to_evict = Vec::new();
-
-    for (k, p) in state.players.iter() {
-        if *now - p.last_seen >= *inactivity_timeout {
-            info!("Evicting player {:?} due to {} timeout",
-                  p.name, inactivity_timeout);
-            to_evict.push(k.clone());
-        }
-    }
-
-    for k in to_evict.iter() {
-        state.players.remove(k);
-    }
+    players.retain(|ref p| *now - p.last_seen < *inactivity_timeout);
 }
 
-fn poll_req(server: &mut Socket, msg: &mut zmq::Message, state: &mut GameState) -> Result<bool, Error> {
+fn poll_req(server: &mut Socket,
+            msg: &mut zmq::Message,
+            now: &SteadyTime,
+            state: &mut GameState) -> Result<bool, Error> {
     if try!(poll(server, msg)) {
-        let resp = match handle_msg(msg, state) {
+        let resp = match handle_msg(msg, now, state) {
             Ok(r) => r,
             Err(Error::Protobuf(ProtobufError::WireError(msg))) =>
                 err_response(Error_Kind::WIRE_ERROR, &msg),
@@ -89,10 +80,16 @@ fn poll_req(server: &mut Socket, msg: &mut zmq::Message, state: &mut GameState) 
                 err_response(
                     Error_Kind::UNKNOWN_REQUEST,
                     "This server doesn't understand the request"),
-            Err(Error::Unauthorized) =>
+            Err(Error::Unauthorized(UnauthReason::NoTokenSpecified)) =>
                 err_response(
                     Error_Kind::UNAUTHORIZED,
-                    "You are missing or using an invalid access_token!"),
+                    "The specified request requires an access_token!"),
+            Err(Error::Unauthorized(UnauthReason::NoSuchToken)) =>
+                err_response(
+                    Error_Kind::UNAUTHORIZED,
+                    &format!("The token you specified does not exist or has expired! \
+                              Note that tokens expire after {} seconds of inactivity.",
+                             INACTIVITY_TIMEOUT_NS as f64 / 1e9)),
             Err(e) => {
                 return Err(e);
             },
@@ -110,10 +107,11 @@ fn tick(state: &mut GameState, now: &SteadyTime, d: &Duration) {
         warn!("Tick of zero duration; the system timer is probably lo-res");
         return;
     }
+    trace!("Tick at {}", now);
 
     let delta = d.num_nanoseconds().map_or(std::f64::MAX, |n| n as f64 / 1e9);
 
-    for (_, player) in state.players.iter_mut() {
+    for player in state.players.iter_mut() {
         player.direction =
             (player.direction + player.angular_velocity * delta)
             % std::f64::consts::PI_2;
@@ -134,27 +132,26 @@ fn run_server() -> Result<(), Error> {
 
     info!("Starting server");
 
-    let mut state = GameState::new(1024f64, 1024f64);
+    let mut state = GameState::new(ARENA_WIDTH, ARENA_HEIGHT);
     let mut server = try!(ctx.socket(zmq::REP));
     try!(server.set_rcvtimeo(Option::Some(0)));
-    try!(server.set_sndhwm(16));
-    try!(server.set_rcvhwm(16));
+    try!(server.set_rcvhwm(RECEIVE_HWM));
 
     try!(server.bind(ADDRESS));
     info!("Server started on address {}", ADDRESS);
 
-    let handle_msg_timeout = Duration::milliseconds(1);
-    let inactivity_timeout = Duration::seconds(10);
+    let handle_msg_timeout = Duration::nanoseconds(HANDLE_MSG_TIMEOUT_NS);
+    let inactivity_timeout = Duration::nanoseconds(INACTIVITY_TIMEOUT_NS);
     let mut msg = try!(zmq::Message::new());
 
     let mut last_tick = SteadyTime::now();
     loop {
         let now = SteadyTime::now();
-        evict_players(&mut state, &now, &inactivity_timeout);
+        evict_players(&mut state.players, &now, &inactivity_timeout);
 
         let mut has_msg = true;
         while has_msg && SteadyTime::now() < now + handle_msg_timeout {
-            has_msg = try!(poll_req(&mut server, &mut msg, &mut state));
+            has_msg = try!(poll_req(&mut server, &mut msg, &now, &mut state));
         }
 
         tick(&mut state, &now, &(now - last_tick));
