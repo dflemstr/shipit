@@ -1,3 +1,6 @@
+/// The version of shipit
+pub const VERSION: &'static str = env!("CARGO_PKG_VERSION");
+
 /// The address that the server should listen on.
 pub const ADDRESS: &'static str = "tcp://*:1337";
 

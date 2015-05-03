@@ -7,6 +7,7 @@ extern crate log;
 extern crate protobuf;
 extern crate rand;
 extern crate time;
+extern crate unicode_normalization;
 extern crate zmq;
 
 mod error;
@@ -30,19 +31,11 @@ use time::SteadyTime;
 use zmq::Socket;
 
 // Modules
-use error::{Error, UnauthReason};
+use error::Error;
 use protocol::{Request, Response, Error_Kind};
 use settings::*;
 use state::{GameState, Players};
 use util::err_response;
-
-fn handle_msg(msg: &zmq::Message,
-              now: &SteadyTime,
-              state: &mut GameState) -> Result<Response, Error> {
-    let req = try!(protobuf::parse_from_bytes::<Request>(msg.as_ref()));
-    let resp = try!(handler::handle(&req, now, state));
-    Ok(resp)
-}
 
 fn poll(s: &mut Socket, msg: &mut zmq::Message) -> Result<bool, Error> {
     match s.recv(msg, 0) {
@@ -69,36 +62,23 @@ fn poll_req(server: &mut Socket,
             now: &SteadyTime,
             state: &mut GameState) -> Result<bool, Error> {
     if try!(poll(server, msg)) {
-        let resp = match handle_msg(msg, now, state) {
-            Ok(r) => r,
-            Err(Error::Protobuf(ProtobufError::WireError(msg))) =>
-                err_response(Error_Kind::WIRE_ERROR, &msg),
-            Err(Error::Protobuf(ProtobufError::IoError(e))) =>
-                err_response(Error_Kind::IO_ERROR,
-                             std::error::Error::description(&e)),
-            Err(Error::UnknownRequest) =>
-                err_response(
-                    Error_Kind::UNKNOWN_REQUEST,
-                    "This server doesn't understand the request"),
-            Err(Error::Unauthorized(UnauthReason::NoTokenSpecified)) =>
-                err_response(
-                    Error_Kind::UNAUTHORIZED,
-                    "The specified request requires an access_token!"),
-            Err(Error::Unauthorized(UnauthReason::NoSuchToken)) =>
-                err_response(
-                    Error_Kind::UNAUTHORIZED,
-                    &format!("The token you specified does not exist or has expired! \
-                              Note that tokens expire after {} seconds of inactivity.",
-                             INACTIVITY_TIMEOUT_NS as f64 / 1e9)),
-            Err(e) => {
-                return Err(e);
-            },
-        };
-
-        try!(respond(server, resp));
+        try!(respond(server, handle_msg(msg, now, state)));
         Ok(true)
     } else {
         Ok(false)
+    }
+}
+
+fn handle_msg(msg: &zmq::Message,
+              now: &SteadyTime,
+              state: &mut GameState) -> Response {
+    match protobuf::parse_from_bytes::<Request>(msg.as_ref()) {
+        Ok(req) => handler::handle(&req, now, state),
+        Err(ProtobufError::WireError(msg)) =>
+            err_response(Error_Kind::WIRE_ERROR, &msg),
+        Err(ProtobufError::IoError(e)) =>
+            err_response(Error_Kind::IO_ERROR,
+                         std::error::Error::description(&e)),
     }
 }
 
@@ -134,7 +114,6 @@ fn run_server() -> Result<(), Error> {
 
     let mut state = GameState::new(ARENA_WIDTH, ARENA_HEIGHT);
     let mut server = try!(ctx.socket(zmq::REP));
-    try!(server.set_rcvtimeo(Option::Some(0)));
     try!(server.set_rcvhwm(RECEIVE_HWM));
 
     try!(server.bind(ADDRESS));

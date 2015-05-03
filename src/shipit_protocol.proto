@@ -1,3 +1,5 @@
+syntax = "proto3";
+
 // Requests
 message Request {
   oneof msg {
@@ -8,22 +10,22 @@ message Request {
     Update update = 5;
     Scan scan = 6;
   }
-  optional string access_token = 64;
+  string access_token = 64;
 }
 
 message Identify {
-  optional string name = 1;
+  string name = 1;
 }
 
 message Ping {
-  optional bytes payload = 1;
+  bytes payload = 1;
 }
 
 message Disconnect {
 }
 
 message Update {
-  optional double angular_velocity = 1;
+  double angular_velocity = 1;
 }
 
 message Scan {
@@ -42,25 +44,25 @@ message Response {
 }
 
 message Identified {
-  required string access_token = 1;
-  optional string server_info = 2;
+  string access_token = 1;
+  string server_info = 2;
 }
 
 message Pong {
-  optional bytes payload = 1;
+  bytes payload = 1;
 }
 
 message Disconnected {
 }
 
 message Updated {
-  required double angular_velocity = 1;
+  double angular_velocity = 1;
 }
 
 message Scanned {
   message Hit {
-    required double distance = 1;
-    required double angle = 2;
+    double distance = 1;
+    double angle = 2;
   }
 
   repeated Hit hit = 1;
@@ -68,13 +70,13 @@ message Scanned {
 
 message Error {
   enum Kind {
-    WIRE_ERROR = 1;
-    IO_ERROR = 2;
-    UNKNOWN_REQUEST = 3;
-    UNAUTHORIZED = 4;
-    PLAYER_NAME_TAKEN = 5;
+    WIRE_ERROR = 0;
+    IO_ERROR = 1;
+    UNKNOWN_REQUEST = 2;
+    UNAUTHORIZED = 3;
+    PLAYER_NAME_TAKEN = 4;
   }
 
-  required Kind kind = 1;
-  optional string msg = 2;
+  Kind kind = 1;
+  string msg = 2;
 }
