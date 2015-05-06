@@ -7,10 +7,6 @@ pub const ADDRESS: &'static str = "tcp://*:1337";
 /// How many requests to buffer before stalling clients.
 pub const RECEIVE_HWM: i32 = 16;
 
-/// The time the server may spend handling incoming requests before
-/// another simulation tick must happen.
-pub const HANDLE_MSG_TIMEOUT_NS: i64 = 1_000_000;
-
 /// The time it takes for a player to be evicted if that player hasn't
 /// sent any requests during that time.
 pub const INACTIVITY_TIMEOUT_NS: i64 = 10_000_000_000;

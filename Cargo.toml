@@ -1,13 +1,23 @@
 [package]
-
 name = "shipit"
 version = "0.0.1"
 authors = ["David Flemström <david.flemstrom@gmail.com>"]
+build = "build.rs"
+
+[lib]
+name = "shipit"
+
+[[bin]]
+name = "shipit"
+path = "src/main.rs"
+
+[build-dependencies]
+capnpc = "0.2.2"
 
 [dependencies]
+capnp = "0.2.2"
 env_logger = "0.3.0"
 log = "0.3.1"
-protobuf = "0.0.10"
 rand = "0.3.8"
 time = "0.1.25"
 unicode-normalization = "0.1.0"

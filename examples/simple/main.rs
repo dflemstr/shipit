@@ -1,25 +1,14 @@
 #![crate_name = "simple"]
-#![feature(core, convert)]
 
+extern crate capnp;
 extern crate env_logger;
 #[macro_use]
 extern crate log;
-extern crate protobuf;
+extern crate shipit;
 extern crate zmq;
 
-use protobuf::core::{Message, parse_from_bytes};
-
-use zmq::Socket;
-
-mod shipit_protocol;
-use shipit_protocol::{Request, Response};
-
-fn send(s: &mut Socket, req: Request) -> Response {
-    s.send(req.write_to_bytes().ok().unwrap().as_slice(), 0)
-        .ok().unwrap();
-    parse_from_bytes(s.recv_bytes(0).ok().unwrap().as_slice())
-        .ok().unwrap()
-}
+use shipit::comm;
+use shipit::protocol::response;
 
 const ADDRESS: &'static str = "tcp://localhost:1337";
 
@@ -28,25 +17,56 @@ fn main() {
     info!("Connecting to server on address {}", ADDRESS);
 
     let mut context = zmq::Context::new();
+    let mut sender = comm::Sender::new();
+    let mut receiver = comm::Receiver::new();
     let mut s = context.socket(zmq::REQ).ok().unwrap();
 
     s.connect("tcp://localhost:1337").unwrap();
     info!("Connected to server");
 
-    let mut req = Request::new();
-    req.mut_identify().set_name("dflemstr".to_string());
+    sender.send_request(&mut s, |r| {
+        r.init_msg().init_identify().set_name("dflemstr");
+    }).unwrap();
 
-    let resp = send(&mut s, req);
-    println!("Response: {:?}", resp);
-    let identified = resp.get_identified();
+    let received = receiver.recv_response(&mut s).unwrap();
+    let resp = received.get_root().unwrap();
+    let token: String = match resp.get_msg().which() {
+        Ok(response::msg::Identified(data)) => {
+            let identified = data.unwrap();
+            identified.get_access_token().unwrap().to_string()
+        },
+        Ok(response::msg::Error(data)) => {
+            let error = data.unwrap();
+            panic!("Error when sending identify: {}",
+                   error.get_msg().unwrap());
+        }
+        _ => panic!("Unsupported response for identify"),
+    };
+
+    info!("Access token: {}", token);
 
     let mut counter = 0;
     loop {
-        let mut ping = Request::new();
-        ping.set_access_token(identified.get_access_token().to_string());
-        ping.mut_ping().set_payload(format!("{}", counter).into_bytes());
+        let payload = format!("{}", counter).into_bytes();
+
+        sender.send_request(&mut s, |r| {
+            let mut authed_msg = r.init_msg().init_authed();
+            authed_msg.set_access_token(&token);
+            authed_msg.init_msg().init_ping().set_payload(&payload);
+        }).unwrap();
+
+        let received = receiver.recv_response(&mut s).unwrap();
+        let resp = received.get_root().unwrap();
+        match resp.get_msg().which() {
+            Ok(response::msg::Pong(data)) => {
+                let pong = data.unwrap();
+                let received_payload =
+                    String::from_utf8(pong.get_payload().unwrap().to_vec()).unwrap();
+                debug!("Received payload {:?}", received_payload);
+            },
+            _ => panic!("Unsupported response for ping"),
+        };
+
         counter = counter + 1;
-        let pong = send(&mut s, ping);
-        println!("Ping response: {:?}", pong);
     }
 }

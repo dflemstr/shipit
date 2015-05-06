@@ -1,1 +1,0 @@
-../../src/shipit_protocol.rs

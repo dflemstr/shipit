@@ -1,8 +1,9 @@
-use protocol;
+use shipit::protocol;
 
-pub fn err_response(kind: protocol::Error_Kind, msg: &str) -> protocol::Response {
-    let mut r = protocol::Response::new();
-    r.mut_error().set_kind(kind);
-    r.mut_error().set_msg(msg.to_string());
-    r
+pub fn err_response(resp: protocol::response::Builder,
+                    kind: protocol::error::Kind,
+                    msg: &str) {
+    let mut error = resp.init_msg().init_error();
+    error.set_kind(kind);
+    error.set_msg(msg);
 }
