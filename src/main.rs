@@ -88,10 +88,10 @@ fn run_server() -> Result<(), Error> {
         if (poll_items[0].get_revents() & zmq::POLLIN) != 0 {
             let recv = try!(receiver.recv_request(&mut server));
             let req = try!(recv.get_root());
-            sender.send_response(&mut server, |resp| {
+            try!(sender.send_response(&mut server, |resp| {
                 // TODO: handle this; would happen if req has illegal content
                 handler::handle(req, resp, &now, &mut state).unwrap();
-            }).unwrap();
+            }));
         }
 
         tick(&mut state, &now, &(now - last_tick));
