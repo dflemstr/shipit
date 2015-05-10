@@ -7,6 +7,8 @@ extern crate log;
 extern crate shipit;
 extern crate zmq;
 
+use std::env;
+
 use shipit::comm;
 use shipit::protocol::response;
 
@@ -14,6 +16,15 @@ const ADDRESS: &'static str = "tcp://localhost:1337";
 
 fn main() {
     env_logger::init().unwrap();
+
+    let args = env::args().collect::<Vec<String>>();
+    if args.len() < 1 {
+        error!("No user name specified (first CLI argument)");
+        return;
+    }
+    let name = &args[1];
+    info!("You are {:?}", name);
+
     info!("Connecting to server on address {}", ADDRESS);
 
     let mut context = zmq::Context::new();
@@ -25,7 +36,7 @@ fn main() {
     info!("Connected to server");
 
     sender.send_request(&mut s, |r| {
-        r.init_msg().init_identify().set_name("dflemstr");
+        r.init_msg().init_identify().set_name(name);
     }).unwrap();
 
     let received = receiver.recv_response(&mut s).unwrap();
