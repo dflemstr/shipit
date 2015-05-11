@@ -25,6 +25,7 @@ impl GameState {
 pub struct Player {
     pub name: String,
     pub access_token: String,
+    pub connected: SteadyTime,
     pub last_seen: SteadyTime,
 
     pub x: f64,
@@ -35,10 +36,11 @@ pub struct Player {
 }
 
 impl Player {
-    pub fn new(n: String, t: String) -> Self {
+    pub fn new(n: String, t: String, now: &SteadyTime) -> Self {
         Player {
             name: n,
-            last_seen: SteadyTime::now(),
+            connected: *now,
+            last_seen: *now,
             access_token: t,
 
             x: 0.0,

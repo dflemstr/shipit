@@ -1,10 +1,10 @@
 #![feature(core)]
 
 // External stuff
-extern crate capnp;
 extern crate env_logger;
 #[macro_use]
 extern crate log;
+extern crate protobuf;
 extern crate rand;
 extern crate shipit;
 extern crate time;
@@ -86,12 +86,9 @@ fn run_server() -> Result<(), Error> {
         try!(zmq::poll(&mut poll_items, 0));
 
         if (poll_items[0].get_revents() & zmq::POLLIN) != 0 {
-            let recv = try!(receiver.recv_request(&mut server));
-            let req = try!(recv.get_root());
-            try!(sender.send_response(&mut server, |resp| {
-                // TODO: handle this; would happen if req has illegal content
-                handler::handle(req, resp, &now, &mut state).unwrap();
-            }));
+            let req = try!(receiver.recv_request(&mut server));
+            let resp = handler::handle(&req, &now, &mut state);
+            try!(sender.send_response(&mut server, &resp));
         }
 
         tick(&mut state, &now, &(now - last_tick));

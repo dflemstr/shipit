@@ -1,56 +1,28 @@
-use std::io;
-use std::marker::PhantomData;
-
-use capnp;
-use capnp::serialize::OwnedSpaceMessageReader;
-use capnp::message::{DEFAULT_READER_OPTIONS,
-                     MessageBuilder, MessageReader,
-                     MallocMessageBuilder};
-use capnp::traits::FromPointerReader;
-use capnp::serialize_packed;
+use protobuf;
 use zmq;
 
 use error::Error;
-use protocol::{request, response};
+use protocol::{Request, Response};
 
-pub struct Sender {
-    builder: MallocMessageBuilder,
-    buffer: Vec<u8>,
-}
+pub struct Sender;
 
 pub struct Receiver;
 
-pub struct Received<A> {
-    reader: OwnedSpaceMessageReader,
-    data: PhantomData<A>,
-}
-
 impl Sender {
     pub fn new() -> Self {
-        Sender {
-            builder: MallocMessageBuilder::new_default(),
-            buffer: Vec::new(),
-        }
+        Sender
     }
 
-    pub fn send_request<F>(&mut self,
-                           s: &mut zmq::Socket,
-                           make_request: F) -> Result<(), Error>
-        where F: FnOnce(request::Builder) {
-
-        make_request(self.builder.init_root::<request::Builder>());
-        try!(send_raw(s, &mut self.buffer, &mut self.builder));
-        Ok(())
+    pub fn send_request(&mut self,
+                        s: &mut zmq::Socket,
+                        request: &Request) -> Result<(), Error> {
+        send_raw(s, request)
     }
 
-    pub fn send_response<F>(&mut self,
-                            s: &mut zmq::Socket,
-                            make_response: F) -> Result<(), Error>
-        where F: FnOnce(response::Builder) {
-
-        make_response(self.builder.init_root::<response::Builder>());
-        try!(send_raw(s, &mut self.buffer, &mut self.builder));
-        Ok(())
+    pub fn send_response(&mut self,
+                         s: &mut zmq::Socket,
+                         response: &Response) -> Result<(), Error> {
+        send_raw(s, response)
     }
 }
 
@@ -59,46 +31,39 @@ impl Receiver {
         Receiver
     }
 
-    pub fn recv_request<'a>(&mut self, s: &mut zmq::Socket)
-                            -> Result<Received<request::Reader<'a>>, Error> {
-
-        let reader = try!(recv_raw(s));
-        Ok(Received::new(reader))
+    pub fn recv_request(&mut self,
+                        s: &mut zmq::Socket) -> Result<Request, Error> {
+        recv_raw(s)
     }
 
-    pub fn recv_response<'a>(&mut self, s: &mut zmq::Socket)
-                             -> Result<Received<response::Reader<'a>>, Error> {
-        let reader = try!(recv_raw(s));
-        Ok(Received::new(reader))
+    pub fn recv_response(&mut self,
+                         s: &mut zmq::Socket)-> Result<Response, Error> {
+        recv_raw(s)
     }
 }
 
-impl<'a, A: FromPointerReader<'a>> Received<A> {
-    fn new(reader: OwnedSpaceMessageReader) -> Self {
-        Received { reader: reader, data: PhantomData }
-    }
-
-    pub fn get_root(&'a self) -> Result<A, capnp::Error> {
-        self.reader.get_root::<A>()
-    }
-}
-
-fn recv_raw(socket: &mut zmq::Socket)
-            -> Result<OwnedSpaceMessageReader, Error> {
+#[inline]
+fn recv_raw<A>(socket: &mut zmq::Socket) -> Result<A, Error>
+    where A: protobuf::MessageStatic {
     let message = try!(socket.recv_bytes(0));
-    let mut cursor = io::Cursor::new(message);
-    let reader =
-        try!(serialize_packed::read_message(&mut cursor, DEFAULT_READER_OPTIONS));
-    Ok(reader)
+    let entity = try!(protobuf::parse_from_bytes(&(*message)));
+    Ok(entity)
 }
 
-fn send_raw<B>(socket: &mut zmq::Socket,
-               buffer: &mut Vec<u8>,
-               message: &mut B) -> Result<(), Error>
-    where B: capnp::message::MessageBuilder {
+#[inline]
+fn send_raw<A>(socket: &mut zmq::Socket, entity: &A) -> Result<(), Error>
+    where A: protobuf::Message {
+    let size = entity.compute_size() as usize;
+    let mut message =
+        try!(unsafe { zmq::Message::with_capacity_unallocated(size) });
 
-    buffer.clear();
-    try!(serialize_packed::write_message(buffer, message));
-    try!(socket.send(buffer, 0));
+    // limit lifetime of mut message borrow
+    {
+        let mut data: &mut [u8] = &mut *message;
+        let mut out = protobuf::CodedOutputStream::new(&mut data);
+        try!(entity.write_to_with_cached_sizes(&mut out));
+    }
+
+    try!(socket.send(&message, 0));
     Ok(())
 }
