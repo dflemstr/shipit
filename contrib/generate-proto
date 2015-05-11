@@ -1,0 +1,2 @@
+#!/bin/sh
+exec protoc --rust_out=src --java_out=examples/java/src/main/java proto/protocol.proto

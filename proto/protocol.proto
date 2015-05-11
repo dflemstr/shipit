@@ -1,5 +1,9 @@
 syntax = "proto3";
 
+package shipit;
+
+option java_package = "name.dflemstr.shipit";
+
 // Requests
 message Request {
   oneof msg {
