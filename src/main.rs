@@ -1,5 +1,3 @@
-#![feature(core)]
-
 // External stuff
 extern crate env_logger;
 #[macro_use]
@@ -47,7 +45,7 @@ fn tick(state: &mut GameState, now: &SteadyTime, d: &Duration) {
     for player in state.players.iter_mut() {
         player.direction =
             (player.direction + player.angular_velocity * delta)
-            % std::f64::consts::PI_2;
+            % (std::f64::consts::PI * 2.0);
 
         player.x =
             (player.x + SHIP_SPEED * player.direction.cos() * delta)

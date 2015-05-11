@@ -3,9 +3,6 @@ name = "shipit"
 version = "0.0.1"
 authors = ["David Flemström <david.flemstrom@gmail.com>"]
 
-[profile.release]
-lto = true
-
 [lib]
 name = "shipit"
 
