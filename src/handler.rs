@@ -149,3 +149,124 @@ fn handle_scan(state: &mut GameState, index: usize) -> Response {
         }
     })
 }
+
+#[test]
+fn test_auth_player_no_such_token() {
+    let token = "abc123";
+    let now = SteadyTime::now();
+    let mut state = GameState::new(1.0, 1.0);
+    state.players.push(Player::new("göran".to_string(), "abc124".to_string(), &now));
+
+    let res = auth_player(token, &now, &mut state);
+
+    assert!(res.is_none());
+}
+
+#[test]
+fn test_auth_player_success() {
+    let token = "abc123";
+    let now = SteadyTime::now();
+    let mut state = GameState::new(1.0, 1.0);
+    state.players.push(Player::new("göran".to_string(), "abc124".to_string(), &now));
+    state.players.push(Player::new("dflemstr".to_string(), "abc123".to_string(), &now));
+
+    let res = auth_player(token, &now, &mut state);
+
+    assert!(res.is_some());
+    let idx = res.unwrap();
+    // index of dflemstr
+    assert_eq!(1, idx);
+}
+
+#[test]
+fn test_handle_identify_taken() {
+    let now = SteadyTime::now();
+    let mut identify = protocol::Request_Identify::new();
+    identify.set_name("dflemstr".to_string());
+    let mut state = GameState::new(1.0, 1.0);
+    state.players.push(Player::new("dflemstr".to_string(), "abc123".to_string(), &now));
+
+    let resp = handle_identify(&identify, &now, &mut state);
+
+    assert!(resp.has_error());
+    let err = resp.get_error();
+    assert!(err.has_kind());
+    assert_eq!(protocol::Error_Kind::PLAYER_NAME_TAKEN, err.get_kind());
+}
+
+#[test]
+fn test_handle_identify_taken_nfkc() {
+    let now = SteadyTime::now();
+    let mut identify = protocol::Request_Identify::new();
+    identify.set_name("Å".to_string());
+    let mut state = GameState::new(1.0, 1.0);
+    // the player's name is A + the ring above Å
+    state.players.push(Player::new("A\u{30a}".to_string(), "abc123".to_string(), &now));
+
+    let resp = handle_identify(&identify, &now, &mut state);
+
+    assert!(resp.has_error());
+    let err = resp.get_error();
+    assert!(err.has_kind());
+    assert_eq!(protocol::Error_Kind::PLAYER_NAME_TAKEN, err.get_kind());
+}
+
+#[test]
+fn test_handle_identify_success() {
+    let now = SteadyTime::now();
+    let mut identify = protocol::Request_Identify::new();
+    identify.set_name("dflemstr".to_string());
+    let mut state = GameState::new(1.0, 1.0);
+
+    let resp = handle_identify(&identify, &now, &mut state);
+
+    assert!(resp.has_identified());
+    assert_eq!(1, state.players.len());
+    assert_eq!("dflemstr", state.players[0].name);
+    assert!(resp.get_identified().has_access_token());
+    assert_eq!(resp.get_identified().get_access_token(),
+               state.players[0].access_token);
+}
+
+#[test]
+fn test_handle_ping_with_payload() {
+    let mut ping = protocol::Request_Authed_Ping::new();
+    ping.set_payload(b"abc123".to_vec());
+
+    let resp = handle_ping(&ping);
+    assert!(resp.has_pong());
+    assert!(resp.get_pong().has_payload());
+    assert_eq!(b"abc123", resp.get_pong().get_payload());
+}
+
+#[test]
+fn test_handle_ping_no_payload() {
+    let mut ping = protocol::Request_Authed_Ping::new();
+
+    let resp = handle_ping(&ping);
+    assert!(resp.has_pong());
+    assert!(!resp.get_pong().has_payload());
+}
+
+#[test]
+fn test_handle_disconnect() {
+    let now = SteadyTime::now();
+    let mut state = GameState::new(1.0, 1.0);
+    state.players.push(Player::new("dflemstr".to_string(), "abc123".to_string(), &now));
+
+    let resp = handle_disconnect(&now, &mut state, 0);
+    assert!(resp.has_disconnected());
+}
+
+#[test]
+fn test_handle_update() {
+    let now = SteadyTime::now();
+    let mut update = protocol::Request_Authed_Update::new();
+    update.set_angular_velocity(1.0);
+    let mut state = GameState::new(1.0, 1.0);
+    state.players.push(Player::new("dflemstr".to_string(), "abc123".to_string(), &now));
+
+    let resp = handle_update(&update, &mut state, 0);
+    assert!(resp.has_updated());
+    assert_eq!(1.0, resp.get_updated().get_angular_velocity());
+}
